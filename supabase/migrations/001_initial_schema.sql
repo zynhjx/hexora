@@ -11,7 +11,7 @@
 create table if not exists public.profiles (
   id          uuid primary key references auth.users (id) on delete cascade,
   username    text not null,
-  orbs        integer not null default 200,   -- in-game currency
+  orbs        integer not null default 20,    -- in-game currency
   pts         integer not null default 0,     -- leaderboard points
   created_at  timestamptz not null default now()
 );

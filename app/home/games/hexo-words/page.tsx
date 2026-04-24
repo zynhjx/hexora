@@ -13,6 +13,8 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { supabase } from "@/supabaseClient";
+import { useUser } from "@/context/user-context";
 
 const GAME_DURATION = 60;
 const PTS_PER_CORRECT = 10;
@@ -547,6 +549,7 @@ type Phase = "ready" | "playing" | "feedback" | "done";
 
 export default function JumbledLettersPage() {
   const router = useRouter();
+  const { refreshProfile } = useUser();
   const [phase, setPhase] = useState<Phase>("ready");
   const [questions, setQuestions] = useState<Question[]>([]);
   const [qIndex, setQIndex] = useState(0);
@@ -561,7 +564,7 @@ export default function JumbledLettersPage() {
   const [scrambledWords, setScrambledWords] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const PAID_KEY = "hexora:paid:/home/games/jumbled-letters";
+  const PAID_KEY = "hexora:paid:/home/games/hexo-words";
 
   // On mount: gate check + resume if refreshed mid-game
   useEffect(() => {
@@ -613,9 +616,17 @@ export default function JumbledLettersPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Clear session when game ends
+  // Clear session and submit result when game ends
   useEffect(() => {
     if (phase === "done") {
+      // pts/correctCount/wrongCount are committed in the same batch as setPhase("done")
+      supabase.rpc("submit_game_result", {
+        p_game_id: "hexo-words",
+        p_score: pts,
+        p_correct_answers: correctCount,
+        p_total_questions: correctCount + wrongCount,
+        p_duration_seconds: GAME_DURATION,
+      }).then(() => refreshProfile());
       sessionStorage.removeItem(SESSION_KEY);
       sessionStorage.removeItem(SESSION_ORDER_KEY);
       sessionStorage.removeItem(SESSION_INDEX_KEY);
@@ -754,18 +765,17 @@ export default function JumbledLettersPage() {
             you get right, the more you earn!
           </p>
 
-          <div className="mb-8 grid grid-cols-3 gap-4 rounded-2xl border border-white/8 bg-white/3 p-5">
+          <div className="mb-8 grid grid-cols-2 gap-4 rounded-2xl border border-white/8 bg-white/3 p-5">
             <div className="text-center">
               <p className="text-xl font-bold text-white">{GAME_DURATION}s</p>
               <p className="mt-0.5 text-xs text-white/40">Timer</p>
             </div>
             <div className="text-center">
-              <p className="text-xl font-bold text-amber-400">
+              <p className="text-xl font-bold text-blue-300">
                 +{PTS_PER_CORRECT} pts
               </p>
               <p className="mt-0.5 text-xs text-white/40">Per correct</p>
             </div>
-
           </div>
 
           <Button

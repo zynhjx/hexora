@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Brain, CheckCircle2, XCircle, Trophy, Gem, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/context/user-context";
+import { supabase } from "@/supabaseClient";
 
 const GAME_DURATION = 60;
 const PTS_PER_CORRECT = 10;
@@ -528,7 +529,7 @@ type Phase = "ready" | "playing" | "feedback" | "done";
 
 export default function HexoQuizPage() {
   const router = useRouter();
-  const { profile, setOrbs } = useUser();
+  const { profile, setOrbs, refreshProfile } = useUser();
   const [phase, setPhase] = useState<Phase>("ready");
   const [questions, setQuestions] = useState<Question[]>([]);
   const [qIndex, setQIndex] = useState(0);
@@ -591,6 +592,13 @@ export default function HexoQuizPage() {
 
   useEffect(() => {
     if (phase === "done") {
+      supabase.rpc("submit_game_result", {
+        p_game_id: "hexo-quiz",
+        p_score: pts,
+        p_correct_answers: correctCount,
+        p_total_questions: correctCount + wrongCount,
+        p_duration_seconds: GAME_DURATION,
+      }).then(() => refreshProfile());
       clearSession();
     }
   }, [phase]);

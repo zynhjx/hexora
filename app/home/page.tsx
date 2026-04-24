@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Shuffle, Brain, Gem } from "lucide-react";
+import { Shuffle, Brain } from "lucide-react";
 import type { ElementType } from "react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useUser } from "@/context/user-context";
 import {
   Dialog,
@@ -34,7 +35,7 @@ const games: Game[] = [
     description:
       "Unscramble cybersecurity terms from a hint. Beat the clock for bonus points!",
     icon: Shuffle,
-    route: "/home/games/jumbled-letters",
+    route: "/home/games/hexo-words",
   },
   {
     id: 2,
@@ -69,8 +70,8 @@ function GameCard({
       </p>
 
       <div className="mt-5 flex items-center justify-end">
-        <span className="flex items-center gap-1 text-xs text-amber-400/70">
-          <Gem className="h-3 w-3" />
+        <span className="flex items-center gap-1 text-xs text-blue-300/70">
+          <img src="/orb.svg" alt="orbs" className="h-3 w-3" />
           {ENTRY_COST} orbs
         </span>
       </div>
@@ -80,12 +81,12 @@ function GameCard({
 
 export default function PlayPage() {
   const router = useRouter();
-  const { profile, setOrbs } = useUser();
+  const { profile, loading, setOrbs } = useUser();
   const orbs = profile.orbs;
   const [selected, setSelected] = useState<Game | null>(null);
 
   const SESSION_KEYS: Record<string, string> = {
-    "/home/games/jumbled-letters": "hexora:jl:startTime",
+    "/home/games/hexo-words": "hexora:jl:startTime",
     "/home/games/hexo-quiz": "hexora:hq:startTime",
   };
 
@@ -100,7 +101,7 @@ export default function PlayPage() {
     setSelected(game);
   }
 
-  function handleConfirm() {
+  async function handleConfirm() {
     if (!selected) return;
     // If there's already an active session or a pending paid token, resume without charging
     const hasSession = sessionStorage.getItem(SESSION_KEYS[selected.route] ?? "");
@@ -114,7 +115,7 @@ export default function PlayPage() {
       toast.error(`Not enough orbs. You need ${ENTRY_COST} orbs to play.`);
       return;
     }
-    setOrbs((prev) => prev - ENTRY_COST);
+    await setOrbs((prev) => prev - ENTRY_COST);
     // Write a one-time entry token so the game page knows orbs were paid
     sessionStorage.setItem(`hexora:paid:${selected.route}`, "1");
     setSelected(null);
@@ -126,9 +127,13 @@ export default function PlayPage() {
       {/* Greeting */}
       <div className="mb-10">
         <p className="text-sm font-medium text-white/40">Welcome back,</p>
-        <h1 className="text-3xl font-bold text-white">
-          {profile.username.replace(/[_\-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
-        </h1>
+        {loading ? (
+          <Skeleton className="h-9 w-48 bg-white/8" />
+        ) : (
+          <h1 className="text-3xl font-bold text-white">
+            {profile.username.replace(/[_\-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+          </h1>
+        )}
       </div>
 
       {/* Games section */}
@@ -185,7 +190,7 @@ export default function PlayPage() {
               disabled={orbs < ENTRY_COST}
               className="bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50"
             >
-              <Gem className="mr-1.5 h-3.5 w-3.5" />
+              <img src="/orb.svg" alt="orbs" className="mr-1.5 h-3.5 w-3.5" />
               Spend {ENTRY_COST} orbs &amp; Play
             </Button>
           </DialogFooter>

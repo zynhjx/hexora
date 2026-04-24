@@ -65,8 +65,8 @@ export default function AuthPage() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-theme-dark-blue px-5 py-10 font-sans sm:px-8">
-      <section className="relative w-full max-w-lg rounded-3xl border border-white/20 bg-theme-dark-blue p-8 text-white shadow-[0_24px_60px_rgba(0,0,0,0.55)] sm:p-10">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-theme-dark-blue px-0 py-0 font-sans sm:px-8 sm:py-10">
+      <section className="relative w-full max-w-lg rounded-none border-0 bg-theme-dark-blue p-8 text-white shadow-none sm:rounded-3xl sm:border sm:border-white/20 sm:p-10 sm:shadow-[0_24px_60px_rgba(0,0,0,0.55)] min-h-screen sm:min-h-0 flex flex-col justify-center">
         <header className="mb-8 space-y-3 text-center">
           <p className="text-xs font-medium uppercase tracking-[0.24em] text-white/60">Hexora Access</p>
           <h1 className="text-3xl font-semibold leading-tight sm:text-4xl">

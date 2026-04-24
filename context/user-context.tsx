@@ -14,8 +14,9 @@ interface UserProfile {
 interface UserContextValue {
   profile: UserProfile;
   loading: boolean;
-  setOrbs: (orbs: number | ((prev: number) => number)) => void;
+  setOrbs: (orbs: number | ((prev: number) => number)) => Promise<void>;
   setPts: (pts: number | ((prev: number) => number)) => void;
+  refreshProfile: () => Promise<void>;
 }
 
 const UserContext = createContext<UserContextValue | null>(null);
@@ -24,7 +25,7 @@ const DEFAULT_PROFILE: UserProfile = {
   id: "",
   username: "Player",
   email: "",
-  orbs: 200,
+  orbs: 0,
   pts: 0,
 };
 
@@ -79,13 +80,16 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  function setOrbs(value: number | ((prev: number) => number)) {
-    setProfile((p) => {
-      const next = typeof value === "function" ? value(p.orbs) : value;
-      // Persist to DB (fire-and-forget)
-      if (p.id) supabase.from("profiles").update({ orbs: next }).eq("id", p.id);
-      return { ...p, orbs: next };
-    });
+  async function setOrbs(value: number | ((prev: number) => number)) {
+    const next = typeof value === "function" ? value(profile.orbs) : value;
+    if (!profile.id) return;
+    const { data } = await supabase
+      .from("profiles")
+      .update({ orbs: next })
+      .eq("id", profile.id)
+      .select("orbs")
+      .single();
+    if (data) setProfile((p) => ({ ...p, orbs: data.orbs }));
   }
 
   function setPts(value: number | ((prev: number) => number)) {
@@ -96,8 +100,19 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     });
   }
 
+  async function refreshProfile() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return;
+    const { data } = await supabase
+      .from("profiles")
+      .select("orbs, pts")
+      .eq("id", session.user.id)
+      .single();
+    if (data) setProfile((p) => ({ ...p, orbs: data.orbs, pts: data.pts }));
+  }
+
   return (
-    <UserContext.Provider value={{ profile, loading, setOrbs, setPts }}>
+    <UserContext.Provider value={{ profile, loading, setOrbs, setPts, refreshProfile }}>
       {children}
     </UserContext.Provider>
   );
