@@ -83,6 +83,7 @@ export default function PlayPage() {
   const router = useRouter();
   const { profile, loading, setOrbs } = useUser();
   const orbs = profile.orbs;
+  const [confirming, setConfirming] = useState(false);
   const [selected, setSelected] = useState<Game | null>(null);
 
   const SESSION_KEYS: Record<string, string> = {
@@ -115,7 +116,13 @@ export default function PlayPage() {
       toast.error(`Not enough orbs. You need ${ENTRY_COST} orbs to play.`);
       return;
     }
-    await setOrbs((prev) => prev - ENTRY_COST);
+    setConfirming(true);
+    const ok = await setOrbs((prev) => prev - ENTRY_COST);
+    setConfirming(false);
+    if (!ok) {
+      toast.error("Failed to deduct orbs. Please try again.");
+      return;
+    }
     // Write a one-time entry token so the game page knows orbs were paid
     sessionStorage.setItem(`hexora:paid:${selected.route}`, "1");
     setSelected(null);
@@ -187,11 +194,11 @@ export default function PlayPage() {
             </Button>
             <Button
               onClick={handleConfirm}
-              disabled={orbs < ENTRY_COST}
+              disabled={orbs < ENTRY_COST || confirming}
               className="bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50"
             >
               <img src="/orb.svg" alt="orbs" className="mr-1.5 h-3.5 w-3.5" />
-              Spend {ENTRY_COST} orbs &amp; Play
+              {confirming ? "Deducting…" : `Spend ${ENTRY_COST} orbs & Play`}
             </Button>
           </DialogFooter>
         </DialogContent>

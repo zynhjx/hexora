@@ -14,7 +14,7 @@ interface UserProfile {
 interface UserContextValue {
   profile: UserProfile;
   loading: boolean;
-  setOrbs: (orbs: number | ((prev: number) => number)) => Promise<void>;
+  setOrbs: (orbs: number | ((prev: number) => number)) => Promise<boolean>;
   setPts: (pts: number | ((prev: number) => number)) => void;
   refreshProfile: () => Promise<void>;
 }
@@ -80,16 +80,29 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  async function setOrbs(value: number | ((prev: number) => number)) {
+  async function setOrbs(value: number | ((prev: number) => number)): Promise<boolean> {
     const next = typeof value === "function" ? value(profile.orbs) : value;
-    if (!profile.id) return;
-    const { data } = await supabase
+    if (!profile.id) return false;
+    // Optimistic update so the header reflects the change immediately
+    setProfile((p) => ({ ...p, orbs: next }));
+    const { data, error } = await supabase
       .from("profiles")
       .update({ orbs: next })
       .eq("id", profile.id)
       .select("orbs")
       .single();
-    if (data) setProfile((p) => ({ ...p, orbs: data.orbs }));
+    if (error || !data) {
+      // Revert to the server value if persisting failed
+      const { data: fresh } = await supabase
+        .from("profiles")
+        .select("orbs")
+        .eq("id", profile.id)
+        .single();
+      if (fresh) setProfile((p) => ({ ...p, orbs: fresh.orbs }));
+      return false;
+    }
+    setProfile((p) => ({ ...p, orbs: data.orbs }));
+    return true;
   }
 
   function setPts(value: number | ((prev: number) => number)) {
