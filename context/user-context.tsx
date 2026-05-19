@@ -6,6 +6,7 @@ import { supabase } from "@/supabaseClient";
 interface UserProfile {
   id: string;
   username: string;
+  fullName: string;
   email: string;
   orbs: number;
   pts: number;
@@ -24,6 +25,7 @@ const UserContext = createContext<UserContextValue | null>(null);
 const DEFAULT_PROFILE: UserProfile = {
   id: "",
   username: "Player",
+  fullName: "",
   email: "",
   orbs: 0,
   pts: 0,
@@ -39,20 +41,27 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     async function loadProfile(userId: string, email: string) {
       const { data } = await supabase
         .from("profiles")
-        .select("id, username, orbs, pts")
+        .select("id, username, full_name, orbs, pts")
         .eq("id", userId)
         .single();
 
-      if (mounted && data) {
-        setProfile({
-          id: data.id,
-          username: data.username,
-          email,
-          orbs: data.orbs,
-          pts: data.pts,
-        });
+      if (!mounted) return;
+
+      if (!data) {
+        // Stale session — profile no longer exists in DB; force sign-out
+        await supabase.auth.signOut();
+        return;
       }
-      if (mounted) setLoading(false);
+
+      setProfile({
+        id: data.id,
+        username: data.username,
+        fullName: data.full_name ?? "",
+        email,
+        orbs: data.orbs,
+        pts: data.pts,
+      });
+      setLoading(false);
     }
 
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -73,6 +82,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         }
       }
     });
+
 
     return () => {
       mounted = false;
@@ -108,7 +118,6 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   function setPts(value: number | ((prev: number) => number)) {
     setProfile((p) => {
       const next = typeof value === "function" ? value(p.pts) : value;
-      if (p.id) supabase.from("profiles").update({ pts: next }).eq("id", p.id);
       return { ...p, pts: next };
     });
   }
@@ -118,10 +127,10 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     if (!session?.user) return;
     const { data } = await supabase
       .from("profiles")
-      .select("orbs, pts")
+      .select("orbs, pts, full_name")
       .eq("id", session.user.id)
       .single();
-    if (data) setProfile((p) => ({ ...p, orbs: data.orbs, pts: data.pts }));
+    if (data) setProfile((p) => ({ ...p, orbs: data.orbs, pts: data.pts, fullName: data.full_name ?? p.fullName }));
   }
 
   return (

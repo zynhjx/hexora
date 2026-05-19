@@ -1,14 +1,19 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Brain, CheckCircle2, XCircle, Trophy, Gem, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/context/user-context";
 import { supabase } from "@/supabaseClient";
 
-const GAME_DURATION = 60;
-const PTS_PER_CORRECT = 10;
+const DIFFICULTY_CONFIG = {
+  easy:         { duration: 120, pts: 10 },
+  intermediate: { duration: 90,  pts: 15 },
+  advanced:     { duration: 60,  pts: 20 },
+} as const;
+
+type Difficulty = keyof typeof DIFFICULTY_CONFIG;
 
 interface Question {
   id: number;
@@ -500,6 +505,262 @@ const QUESTION_POOL: Question[] = [
     explanation: "A supply chain attack compromises a trusted third-party component — open source library, software update, or vendor tool — to reach the end target. When the victim installs the update or imports the library, the malicious code executes in their environment. Auditing dependencies, using software bills of materials (SBOMs), and verifying package integrity are key defenses.",
     source: "CISA / NIST SP 800-161",
   },
+  {
+    id: 61,
+    question: "What attack tricks a web server into making HTTP requests to internal resources that are not normally accessible from the outside?",
+    options: ["CSRF", "XXE", "IDOR", "SSRF"],
+    answer: "SSRF",
+    explanation: "Server-Side Request Forgery (SSRF) forces a server to make requests to internal services — cloud metadata APIs, admin panels, or internal databases — on the attacker's behalf. Because the request originates from the trusted server, internal firewalls allow it. Validating and allowlisting permitted destination URLs prevents SSRF.",
+    source: "OWASP Top 10",
+  },
+  {
+    id: 62,
+    question: "What attack injects malicious external entity declarations into XML input to read local server files or trigger internal requests?",
+    options: ["SQL injection", "SSRF", "XSS", "XXE"],
+    answer: "XXE",
+    explanation: "XML External Entity (XXE) injection exploits XML parsers that process external entity references, allowing attackers to read local files, perform SSRF, or cause denial of service. Per OWASP, the fix is to disable external entity processing in XML parsers — a feature rarely needed in modern applications.",
+    source: "OWASP Top 10",
+  },
+  {
+    id: 63,
+    question: "What vulnerability exposes internal object references — like database record IDs — in URLs without verifying the requester's authorization to access them?",
+    options: ["Broken authentication", "XSS", "Path traversal", "IDOR"],
+    answer: "IDOR",
+    explanation: "Insecure Direct Object Reference (IDOR) occurs when an application uses user-controlled input to access objects without verifying authorization. Changing a URL from /invoice/100 to /invoice/101 may expose another user's data. Per OWASP, every object access must enforce authorization server-side, not just authentication.",
+    source: "OWASP",
+  },
+  {
+    id: 64,
+    question: "What security control requires users to provide two or more independent factors to verify their identity before gaining access?",
+    options: ["SSO", "PAM", "RBAC", "MFA"],
+    answer: "MFA",
+    explanation: "Multi-Factor Authentication (MFA) requires at least two independent factors: something you know (password), something you have (authenticator app or hardware token), or something you are (biometric). Per CISA, enabling MFA is one of the single most impactful security actions an individual or organization can take to prevent account compromise.",
+    source: "NIST SP 800-63B / CISA",
+  },
+  {
+    id: 65,
+    question: "What technology creates an encrypted tunnel to securely transmit data over an untrusted public network like the internet?",
+    options: ["Proxy", "Firewall", "DMZ", "VPN"],
+    answer: "VPN",
+    explanation: "A Virtual Private Network (VPN) creates an encrypted tunnel between a user's device and a trusted network over the internet. Per NIST SP 800-77, VPNs protect data confidentiality and integrity in transit. However, compromised VPN credentials give attackers broad network access, making strong authentication essential for VPN users.",
+    source: "NIST SP 800-77",
+  },
+  {
+    id: 66,
+    question: "What network zone separates publicly accessible servers from the internal private network, acting as a buffer between the internet and internal systems?",
+    options: ["VPN", "VLAN", "Subnet", "DMZ"],
+    answer: "DMZ",
+    explanation: "A Demilitarized Zone (DMZ) is a network segment hosting public-facing services — web servers, email gateways — separated from the internal corporate network by a firewall. If a DMZ server is compromised, the attacker faces another firewall barrier before reaching internal systems. It limits the blast radius of a perimeter breach.",
+    source: "SANS Institute",
+  },
+  {
+    id: 67,
+    question: "What security tool monitors network traffic for suspicious activity and generates alerts — but does NOT actively block threats by itself?",
+    options: ["Firewall", "SIEM", "IPS", "IDS"],
+    answer: "IDS",
+    explanation: "An Intrusion Detection System (IDS) passively monitors network or host activity for signs of known attacks and policy violations, generating alerts for analysts. Per NIST SP 800-94, an IDS does not block traffic — it observes and reports. It must be paired with human review or automated blocking tools to stop threats.",
+    source: "NIST SP 800-94",
+  },
+  {
+    id: 68,
+    question: "What inline security tool actively detects AND automatically blocks malicious network traffic in real time?",
+    options: ["IDS", "WAF", "SIEM", "IPS"],
+    answer: "IPS",
+    explanation: "An Intrusion Prevention System (IPS) is an inline device that monitors traffic and automatically blocks or resets connections matching known attack signatures or anomalous behavior. Per NIST SP 800-94, unlike a passive IDS, an IPS takes active enforcement action — dropping malicious packets before they reach their target.",
+    source: "NIST SP 800-94",
+  },
+  {
+    id: 69,
+    question: "What platform aggregates and correlates security logs from across an IT environment to detect threats and support incident response?",
+    options: ["EDR", "SOAR", "NAC", "SIEM"],
+    answer: "SIEM",
+    explanation: "A Security Information and Event Management (SIEM) system collects centralized log data from firewalls, servers, and endpoints, then uses correlation rules and analytics to surface threats. Per NIST SP 800-92, SIEM is a cornerstone of security operations centers (SOCs). It provides visibility needed to detect multi-stage attacks spanning many systems.",
+    source: "NIST SP 800-92",
+  },
+  {
+    id: 70,
+    question: "What security model assumes no user, device, or network segment is inherently trustworthy — even if they are already inside the corporate network?",
+    options: ["Defense in depth", "Least privilege", "Network segmentation", "Zero Trust"],
+    answer: "Zero Trust",
+    explanation: "Zero Trust is a security architecture that eliminates implicit trust and requires continuous verification of every access request, regardless of where it originates. Per NIST SP 800-207, it is built on three principles: verify explicitly, use least privilege, and assume breach. It replaces the outdated model of trusting everything inside the firewall.",
+    source: "NIST SP 800-207",
+  },
+  {
+    id: 71,
+    question: "What security strategy uses multiple overlapping layers of controls so that if one layer fails, others continue to protect the system?",
+    options: ["Zero Trust", "Least privilege", "Compartmentalization", "Defense in depth"],
+    answer: "Defense in depth",
+    explanation: "Defense in depth applies independent security controls at every layer — physical, network, host, application, and data — so an attacker who bypasses one must defeat additional barriers. Per SANS Institute, no single control is sufficient; layered defenses ensure failures are contained rather than catastrophic.",
+    source: "SANS Institute / NIST",
+  },
+  {
+    id: 72,
+    question: "What security principle states that users and processes should be granted only the minimum permissions needed to perform their tasks?",
+    options: ["Zero Trust", "Need-to-know", "Segregation of duties", "Least privilege"],
+    answer: "Least privilege",
+    explanation: "The principle of least privilege limits access rights to only what is necessary for a specific job function. Per NIST SP 800-53, restricting privileges reduces the blast radius of a compromised account. Regularly reviewing and revoking unnecessary permissions — known as privilege creep — is a critical security hygiene practice.",
+    source: "NIST SP 800-53",
+  },
+  {
+    id: 73,
+    question: "What access control model assigns permissions to users based on their defined job role rather than their individual identity?",
+    options: ["DAC", "MAC", "ABAC", "RBAC"],
+    answer: "RBAC",
+    explanation: "Role-Based Access Control (RBAC) grants permissions to roles — 'admin', 'analyst', 'developer' — and assigns users to those roles instead of managing permissions per individual. Per NIST SP 800-53, RBAC simplifies administration and enforces least privilege at scale. It is the most widely used access control model in enterprise environments.",
+    source: "NIST SP 800-53",
+  },
+  {
+    id: 74,
+    question: "Which OWASP Top 10 category describes users acting outside their intended permissions — accessing other users' data, admin panels, or altering records they should not?",
+    options: ["Broken authentication", "Security misconfiguration", "XSS", "Broken access control"],
+    answer: "Broken access control",
+    explanation: "Broken access control is the #1 OWASP risk (2021). It occurs when restrictions on what authenticated users can do are not properly enforced server-side. Every function and data access must validate authorization — client-side controls alone are insufficient because attackers can bypass them entirely.",
+    source: "OWASP Top 10",
+  },
+  {
+    id: 75,
+    question: "Which OWASP category covers issues like default credentials, open cloud storage, unnecessary services enabled, and verbose error messages left in production?",
+    options: ["Broken access control", "Injection", "Insecure design", "Security misconfiguration"],
+    answer: "Security misconfiguration",
+    explanation: "Security misconfiguration occurs when security settings are not properly defined or maintained — leaving default passwords unchanged, unnecessary features enabled, or cloud storage publicly accessible. Per OWASP, it is consistently one of the most prevalent vulnerabilities because it requires ongoing diligence. Automated configuration scanning helps detect misconfigurations continuously.",
+    source: "OWASP Top 10",
+  },
+  {
+    id: 76,
+    question: "What cryptographic protocol secures web communications (HTTPS), email, and VPN tunnels — and replaced the deprecated SSL protocol?",
+    options: ["IPsec", "SSH", "SSL 3.0", "TLS"],
+    answer: "TLS",
+    explanation: "Transport Layer Security (TLS) provides encrypted, authenticated communication channels over the internet. Per NIST SP 800-52, TLS 1.2 and 1.3 are the currently approved versions. Older versions — SSL 3.0, TLS 1.0, and TLS 1.1 — are deprecated due to known vulnerabilities and must not be used in new or updated systems.",
+    source: "NIST SP 800-52",
+  },
+  {
+    id: 77,
+    question: "Why must passwords be stored as hashed values rather than encrypted text in a database?",
+    options: ["Because encryption is too slow for high-traffic login systems", "Because hashes are one-way and irreversible — even if the database is breached, the original password cannot be recovered", "Because hash algorithms are more widely supported across database platforms", "Because encryption requires passwords to be at least 16 characters long"],
+    answer: "Because hashes are one-way and irreversible — even if the database is breached, the original password cannot be recovered",
+    explanation: "Per NIST SP 800-63B, passwords must be stored using salted cryptographic hashes — not encryption. Encryption can be reversed with the key; hashes cannot. If an attacker steals a database and the encryption key, all passwords are immediately exposed. A properly salted hash forces the attacker to crack each password individually.",
+    source: "NIST SP 800-63B",
+  },
+  {
+    id: 78,
+    question: "What are the three core properties of information security known as the CIA triad?",
+    options: ["Compliance, Identity, and Accountability", "Confidentiality, Identity, and Authentication", "Control, Integrity, and Access", "Confidentiality, Integrity, and Availability"],
+    answer: "Confidentiality, Integrity, and Availability",
+    explanation: "The CIA triad is the foundational model of information security. Per NIST FIPS 199: Confidentiality ensures data is accessible only to authorized parties; Integrity ensures data has not been altered without authorization; Availability ensures authorized users have reliable access to systems and data. Security controls are designed to protect one or more of these properties.",
+    source: "NIST FIPS 199",
+  },
+  {
+    id: 79,
+    question: "What is the primary security benefit of using a dedicated password manager?",
+    options: ["It encrypts the hard drive automatically when the screen locks", "It allows reuse of one strong master password safely across all sites", "It enables a unique, complex password for every account without requiring you to memorize them all", "It prevents keyloggers from recording your passwords as you type"],
+    answer: "It enables a unique, complex password for every account without requiring you to memorize them all",
+    explanation: "Per NIST SP 800-63B and CISA, password managers generate and store unique, strong passwords for every account — eliminating password reuse, the primary driver of credential stuffing attacks. The user only needs to remember one strong master password. Security-focused password managers use end-to-end encryption so even the provider cannot read stored passwords.",
+    source: "NIST SP 800-63B / CISA",
+  },
+  {
+    id: 80,
+    question: "In the NIST SP 800-61 incident response lifecycle, which phase immediately follows Detection and Analysis?",
+    options: ["Post-Incident Activity", "Preparation", "Recovery", "Containment, Eradication, and Recovery"],
+    answer: "Containment, Eradication, and Recovery",
+    explanation: "Per NIST SP 800-61, the incident response lifecycle has four phases: (1) Preparation, (2) Detection and Analysis, (3) Containment, Eradication, and Recovery, and (4) Post-Incident Activity. After detecting and analyzing an incident, the priority shifts to limiting damage, removing the attacker, and restoring normal operations.",
+    source: "NIST SP 800-61",
+  },
+  {
+    id: 81,
+    question: "What is OAuth 2.0 primarily designed to do?",
+    options: ["Encrypt API payloads end-to-end in transit", "Securely store and manage user passwords on a server", "Allow a third-party application to access user resources without exposing the user's password", "Generate one-time passwords for multi-factor authentication"],
+    answer: "Allow a third-party application to access user resources without exposing the user's password",
+    explanation: "OAuth 2.0 (IETF RFC 6749) is an authorization framework that lets users grant third-party applications limited access to their resources without sharing credentials. For example, a fitness app can read your Google Calendar without knowing your Google password. Authorization is delegated through short-lived access tokens rather than passwords.",
+    source: "IETF RFC 6749",
+  },
+  {
+    id: 82,
+    question: "Why is timely patch management one of the most critical security practices an organization can perform?",
+    options: ["Patches improve application performance and reduce support calls", "Patches remove known vulnerabilities that attackers actively exploit", "Patches automatically detect and remove malware from infected systems", "Patches prevent social engineering attacks against employees"],
+    answer: "Patches remove known vulnerabilities that attackers actively exploit",
+    explanation: "Per CISA's Known Exploited Vulnerabilities (KEV) catalog, unpatched vulnerabilities are among the most commonly exploited attack vectors. Applying patches promptly — especially for internet-facing systems — removes the weaknesses attackers depend on. Per NIST SP 800-40, a mature patch management program prioritizes critical patches within days of release.",
+    source: "CISA / NIST SP 800-40",
+  },
+  {
+    id: 83,
+    question: "What is an insider threat in cybersecurity?",
+    options: ["A threat originating from a foreign nation-state hacking group", "A malware strain that spreads laterally to internal systems after initial infection", "A risk posed by individuals with authorized access — employees, contractors, or partners — who misuse it", "An attack targeting internal servers rather than public-facing infrastructure"],
+    answer: "A risk posed by individuals with authorized access — employees, contractors, or partners — who misuse it",
+    explanation: "Per CISA, an insider threat occurs when a person with authorized access — employee, contractor, business partner — uses that access to cause harm, whether intentionally (malicious insider) or accidentally (negligent insider). Insider threats are difficult to detect because access is legitimate. User behavior analytics and least privilege access reduce insider risk.",
+    source: "CISA",
+  },
+  {
+    id: 84,
+    question: "What does non-repudiation mean in cybersecurity?",
+    options: ["The ability to prevent data from being modified in transit", "Preventing unauthorized users from impersonating legitimate accounts", "Encrypting data so only the intended recipient can read it", "Ensuring a party cannot deny having performed a specific action, such as sending a message or completing a transaction"],
+    answer: "Ensuring a party cannot deny having performed a specific action, such as sending a message or completing a transaction",
+    explanation: "Per NIST SP 800-53, non-repudiation is the property that a party cannot deny having performed an action. Digital signatures provide non-repudiation — they cryptographically prove the signer's identity and that the content was not altered. It is essential in legal and financial contexts where proof of transaction authenticity is required.",
+    source: "NIST SP 800-53",
+  },
+  {
+    id: 85,
+    question: "What is the primary purpose of security awareness training for employees?",
+    options: ["To teach employees penetration testing and ethical hacking techniques", "To train employees on using the IT helpdesk ticketing system efficiently", "To fulfill compliance audits without changing day-to-day employee behavior", "To help employees recognize threats and reduce human error as an attack vector"],
+    answer: "To help employees recognize threats and reduce human error as an attack vector",
+    explanation: "Per NIST SP 800-50, security awareness training reduces the risk that employees will fall victim to phishing, social engineering, or other human-targeted attacks. Human error is a factor in the vast majority of data breaches. Effective programs include simulated phishing exercises, regular short modules, and clear reporting procedures.",
+    source: "NIST SP 800-50 / SANS Institute",
+  },
+  {
+    id: 86,
+    question: "In cybersecurity risk management, what is the correct relationship between vulnerability, threat, and risk?",
+    options: ["Risk = Vulnerability × Impact; Threat is a separate concept", "Threat and vulnerability mean the same thing; risk is the financial cost", "Risk is a vulnerability already exploited; threat is a potential future one", "Vulnerability is a weakness; threat is a potential danger that exploits it; risk is the likelihood and impact of that exploitation occurring"],
+    answer: "Vulnerability is a weakness; threat is a potential danger that exploits it; risk is the likelihood and impact of that exploitation occurring",
+    explanation: "Per NIST SP 800-30, a vulnerability is a weakness in a system; a threat is a potential event that could exploit it; and risk is the combination of likelihood and impact. Risk = Likelihood × Impact. Understanding these distinctions guides prioritized security investment — fixing the vulnerabilities most likely to be exploited with the highest potential damage first.",
+    source: "NIST SP 800-30",
+  },
+  {
+    id: 87,
+    question: "Why is secure cryptographic key management so critical to encryption security?",
+    options: ["Because longer keys always provide stronger security regardless of storage", "Because if an encryption key is compromised, all data encrypted with it can be decrypted by the attacker", "Because cryptographic algorithms are public and key management keeps the algorithm secret", "Because key management prevents brute-force attacks on hashed passwords"],
+    answer: "Because if an encryption key is compromised, all data encrypted with it can be decrypted by the attacker",
+    explanation: "Per NIST SP 800-57, the security of an encrypted system ultimately depends on the secrecy of its keys — not the algorithm. If a key is stolen, all data encrypted with it is exposed. Key management practices include rotation, hardware security modules (HSMs) for storage, strict access controls, and automatic expiration to limit the impact of a key compromise.",
+    source: "NIST SP 800-57",
+  },
+  {
+    id: 88,
+    question: "Which indicator is the most reliable sign that a link in an email is malicious?",
+    options: ["The company logo in the email looks slightly off or pixelated", "The email was received outside of normal business hours", "The email contains a PDF attachment rather than inline content", "The URL in the link points to a different domain than the organization that sent the email"],
+    answer: "The URL in the link points to a different domain than the organization that sent the email",
+    explanation: "Per CISA phishing guidance, the actual link destination — visible by hovering before clicking — is the most reliable indicator. Attackers can perfectly replicate logos, formatting, and writing style, but they cannot own the real domain. Always verify the full URL domain before clicking any link in an unexpected email.",
+    source: "CISA",
+  },
+  {
+    id: 89,
+    question: "What type of malware secretly uses a victim's CPU and electricity to mine cryptocurrency for the attacker?",
+    options: ["Ransomware", "Spyware", "Adware", "Cryptojacking malware"],
+    answer: "Cryptojacking malware",
+    explanation: "Cryptojacking installs malware or runs browser-based scripts that hijack the victim's processing power to mine cryptocurrency for the attacker. Victims notice slowed device performance and increased energy bills. Unlike ransomware, cryptojacking aims to stay hidden as long as possible. Endpoint protection and browser security extensions detect cryptojacking activity.",
+    source: "CISA / SANS Institute",
+  },
+  {
+    id: 90,
+    question: "What does EDR (Endpoint Detection and Response) do that traditional antivirus cannot?",
+    options: ["EDR scans email attachments for known malware signatures", "EDR replaces the need for firewalls on endpoint devices", "EDR provides only scheduled scans of files stored on disk", "EDR continuously monitors endpoint behavior, detects advanced threats, records telemetry for forensics, and can isolate compromised devices automatically"],
+    answer: "EDR continuously monitors endpoint behavior, detects advanced threats, records telemetry for forensics, and can isolate compromised devices automatically",
+    explanation: "Per CISA, Endpoint Detection and Response (EDR) solutions continuously monitor endpoint activity — processes, network connections, file changes — to detect behavioral threats that signature-based antivirus misses. EDR records detailed telemetry for forensic investigation and can automatically isolate a compromised endpoint from the network to contain a breach.",
+    source: "CISA",
+  },
+  {
+    id: 91,
+    question: "What is a Security Operations Center (SOC)?",
+    options: ["A physical vault storing cryptographic keys and hardware tokens", "A compliance framework defining minimum security standards", "An automated tool that generates and applies security patches across a network", "A centralized team and facility that continuously monitors, detects, and responds to cybersecurity threats"],
+    answer: "A centralized team and facility that continuously monitors, detects, and responds to cybersecurity threats",
+    explanation: "Per NIST, a Security Operations Center (SOC) is a dedicated team — supported by SIEM, EDR, and threat intelligence tools — that monitors an organization's security posture around the clock. SOC analysts triage alerts, investigate incidents, distinguish true positives from false positives, and coordinate response to confirmed threats.",
+    source: "NIST / SANS Institute",
+  },
+  {
+    id: 92,
+    question: "What is a digital certificate and what does it verify?",
+    options: ["A file containing an encrypted user password for remote authentication", "A one-time passcode generated by a hardware MFA token", "A firewall log file recording all authorized inbound connections", "An electronic credential issued by a trusted Certificate Authority that verifies an entity's identity and contains its public key"],
+    answer: "An electronic credential issued by a trusted Certificate Authority that verifies an entity's identity and contains its public key",
+    explanation: "Per SANS Institute, a digital certificate is an electronic document issued by a trusted Certificate Authority (CA) that binds a public key to an identity. TLS certificates allow browsers to verify they are communicating with the legitimate server and establish an encrypted HTTPS session. Expired, self-signed, or revoked certificates indicate potential security risks.",
+    source: "SANS Institute / NIST SP 800-32",
+  },
 ];
 
 function shuffleArray<T>(arr: T[]): T[] {
@@ -516,14 +777,15 @@ function shuffleOptions(q: Question): Question {
   return { ...q, options: shuffled };
 }
 
-const SESSION_KEY = "hexora:hq:startTime";
+const SESSION_KEY       = "hexora:hq:startTime";
 const SESSION_ORDER_KEY = "hexora:hq:order";
 const SESSION_INDEX_KEY = "hexora:hq:index";
-const SESSION_TIME_KEY = "hexora:hq:timeLeft";
-const SESSION_PTS_KEY = "hexora:hq:pts";
+const SESSION_TIME_KEY  = "hexora:hq:timeLeft";
+const SESSION_PTS_KEY   = "hexora:hq:pts";
 const SESSION_CORRECT_KEY = "hexora:hq:correct";
-const SESSION_WRONG_KEY = "hexora:hq:wrong";
-const PAID_KEY = "hexora:paid:/home/games/hexo-quiz";
+const SESSION_WRONG_KEY   = "hexora:hq:wrong";
+const DIFFICULTY_KEY    = "hexora:hq:difficulty";
+const HQ_PAID_KEY       = "hexora:paid:/home/games/hexo-quiz";
 
 type Phase = "ready" | "playing" | "feedback" | "done";
 
@@ -531,25 +793,38 @@ export default function HexoQuizPage() {
   const router = useRouter();
   const { profile, setOrbs, refreshProfile } = useUser();
   const [phase, setPhase] = useState<Phase>("ready");
+  const [difficulty, setDifficulty] = useState<Difficulty>("intermediate");
   const [questions, setQuestions] = useState<Question[]>([]);
   const [qIndex, setQIndex] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(GAME_DURATION);
+  const [timeLeft, setTimeLeft] = useState(DIFFICULTY_CONFIG.intermediate.duration);
   const [pts, setPts] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
   const [wrongCount, setWrongCount] = useState(0);
   const [feedback, setFeedback] = useState<"correct" | "wrong" | null>(null);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
+  const [selectedAt, setSelectedAt] = useState<number | null>(null);
+  const [checkReady, setCheckReady] = useState(false);
+  const [cooldownSecs, setCooldownSecs] = useState(0);
   const nextBtnRef = useRef<HTMLButtonElement>(null);
+  const cooldownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cooldownTickRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // On mount: gate check + resume if refreshed mid-game
   useEffect(() => {
-    const alreadyPlaying = sessionStorage.getItem(SESSION_KEY);
-    const paid = sessionStorage.getItem(PAID_KEY);
+    const alreadyPlaying    = sessionStorage.getItem(SESSION_KEY);
+    const storedDifficulty  = sessionStorage.getItem(DIFFICULTY_KEY) as Difficulty | null;
+    const paid              = sessionStorage.getItem(HQ_PAID_KEY);
 
-    if (!alreadyPlaying && !paid) {
-      router.replace("/home");
+    if (!alreadyPlaying && !(storedDifficulty && paid)) {
+      router.replace("/home/games/hexo-quiz/difficulty");
       return;
     }
+
+    const resolvedDifficulty: Difficulty =
+      storedDifficulty && storedDifficulty in DIFFICULTY_CONFIG
+        ? storedDifficulty
+        : "intermediate";
+    setDifficulty(resolvedDifficulty);
 
     if (alreadyPlaying) {
       const storedTime = parseInt(sessionStorage.getItem(SESSION_TIME_KEY) ?? "0", 10);
@@ -587,7 +862,8 @@ export default function HexoQuizPage() {
     sessionStorage.removeItem(SESSION_PTS_KEY);
     sessionStorage.removeItem(SESSION_CORRECT_KEY);
     sessionStorage.removeItem(SESSION_WRONG_KEY);
-    sessionStorage.removeItem(PAID_KEY);
+    sessionStorage.removeItem(DIFFICULTY_KEY);
+    sessionStorage.removeItem(HQ_PAID_KEY);
   }
 
   useEffect(() => {
@@ -597,7 +873,7 @@ export default function HexoQuizPage() {
         p_score: pts,
         p_correct_answers: correctCount,
         p_total_questions: correctCount + wrongCount,
-        p_duration_seconds: GAME_DURATION,
+        p_duration_seconds: DIFFICULTY_CONFIG[difficulty].duration,
       }).then(() => refreshProfile());
       clearSession();
     }
@@ -628,46 +904,69 @@ export default function HexoQuizPage() {
     }
   }, [phase]);
 
-  // Keyboard shortcut — Enter to advance
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Enter" && phase === "feedback") {
-        handleNext();
-      }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, qIndex, questions.length]);
-
   function startGame() {
+    const config = DIFFICULTY_CONFIG[difficulty];
     const shuffled = shuffleArray(QUESTION_POOL);
-    sessionStorage.removeItem(PAID_KEY);
     sessionStorage.setItem(SESSION_KEY, Date.now().toString());
     sessionStorage.setItem(SESSION_ORDER_KEY, JSON.stringify(shuffled.map((q) => q.id)));
     sessionStorage.setItem(SESSION_INDEX_KEY, "0");
-    sessionStorage.setItem(SESSION_TIME_KEY, GAME_DURATION.toString());
+    sessionStorage.setItem(SESSION_TIME_KEY, config.duration.toString());
     sessionStorage.setItem(SESSION_PTS_KEY, "0");
     sessionStorage.setItem(SESSION_CORRECT_KEY, "0");
     sessionStorage.setItem(SESSION_WRONG_KEY, "0");
     setQuestions(shuffled.map(shuffleOptions));
     setQIndex(0);
-    setTimeLeft(GAME_DURATION);
+    setTimeLeft(config.duration);
     setPts(0);
     setCorrectCount(0);
     setWrongCount(0);
     setFeedback(null);
     setSelectedAnswer(null);
+    setSelectedAt(null);
     setPhase("playing");
   }
 
-  function handleAnswer(option: string) {
-    if (phase !== "playing" || !questions.length) return;
-    const isCorrect = option === questions[qIndex].answer;
+  // Start 2s cooldown whenever a new question is shown
+  useEffect(() => {
+    if (phase !== "playing") return;
+    if (cooldownRef.current) clearTimeout(cooldownRef.current);
+    if (cooldownTickRef.current) clearInterval(cooldownTickRef.current);
+
+    setCheckReady(false);
+    setCooldownSecs(2);
+
+    // Tick down the visible counter every second
+    cooldownTickRef.current = setInterval(() => {
+      setCooldownSecs((s) => {
+        if (s <= 1) {
+          clearInterval(cooldownTickRef.current!);
+          return 0;
+        }
+        return s - 1;
+      });
+    }, 1000);
+
+    // Enable the button after 2s
+    cooldownRef.current = setTimeout(() => setCheckReady(true), 2000);
+
+    return () => {
+      if (cooldownRef.current) clearTimeout(cooldownRef.current);
+      if (cooldownTickRef.current) clearInterval(cooldownTickRef.current);
+    };
+  }, [phase, qIndex]);
+
+  function handleSelect(option: string) {
+    if (phase !== "playing") return;
     setSelectedAnswer(option);
+    setSelectedAt(Date.now());
+  }
+
+  const handleCheck = useCallback(() => {
+    if (!checkReady || !selectedAnswer || phase !== "playing" || !questions.length) return;
+    const isCorrect = selectedAnswer === questions[qIndex].answer;
 
     if (isCorrect) {
-      const newPts = pts + PTS_PER_CORRECT;
+      const newPts = pts + DIFFICULTY_CONFIG[difficulty].pts;
       const newCorrect = correctCount + 1;
       setPts(newPts);
       setCorrectCount(newCorrect);
@@ -680,9 +979,30 @@ export default function HexoQuizPage() {
       sessionStorage.setItem(SESSION_WRONG_KEY, newWrong.toString());
       setFeedback("wrong");
     }
-
     setPhase("feedback");
+  }, [checkReady, selectedAnswer, phase, questions, qIndex, pts, correctCount, wrongCount, difficulty]);
+
+  function handleSkip() {
+    if (phase !== "playing") return;
+    setSelectedAnswer(null);
+    setSelectedAt(null);
+    const next = (qIndex + 1) % questions.length;
+    sessionStorage.setItem(SESSION_INDEX_KEY, next.toString());
+    setQIndex(next);
   }
+
+  // Keyboard shortcuts — placed after handleCheck to avoid TDZ
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Enter") {
+        if (phase === "feedback") handleNext();
+        else if (phase === "playing" && checkReady) handleCheck();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, qIndex, questions.length, checkReady, handleCheck]);
 
   function handleNext() {
     const next = (qIndex + 1) % questions.length;
@@ -690,6 +1010,7 @@ export default function HexoQuizPage() {
     setQIndex(next);
     setFeedback(null);
     setSelectedAnswer(null);
+    setSelectedAt(null);
     setPhase("playing");
   }
 
@@ -701,6 +1022,8 @@ export default function HexoQuizPage() {
 
   // ─── Ready screen ────────────────────────────────────────────────────────────
   if (phase === "ready") {
+    const config = DIFFICULTY_CONFIG[difficulty];
+    const diffLabel = difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
     return (
       <main className="h-full flex flex-col items-center justify-center px-4 py-10">
         <div className="w-full max-w-md flex flex-col items-center gap-6 text-center">
@@ -711,7 +1034,7 @@ export default function HexoQuizPage() {
           <div className="space-y-2">
             <h1 className="text-3xl font-bold text-white">HexoQuiz</h1>
             <p className="text-white/50 text-sm">
-              60 seconds. 4 options. All real cybersecurity terms — only one is correct.
+              {diffLabel} · {config.duration}s · +{config.pts} pts per correct answer
             </p>
           </div>
 
@@ -720,7 +1043,8 @@ export default function HexoQuizPage() {
             <ul className="text-white/50 text-sm space-y-1.5 list-disc list-inside">
               <li>Read the question and pick the best answer from 4 options</li>
               <li>All options are real cybersecurity terms — choose carefully</li>
-              <li>Each correct answer earns <span className="text-amber-400">+{PTS_PER_CORRECT} pts</span></li>
+              <li>Each correct answer earns <span className="text-amber-400">+{config.pts} pts</span></li>
+              <li>A 2-second cooldown prevents accidental submits on each question</li>
               <li>See an explanation with source after each answer</li>
               <li>Answer as many as you can before the timer runs out</li>
             </ul>
@@ -734,11 +1058,11 @@ export default function HexoQuizPage() {
           </Button>
 
           <button
-            onClick={() => router.push("/home")}
+            onClick={() => router.push("/home/games/hexo-quiz/difficulty")}
             className="flex items-center gap-1.5 text-white/40 hover:text-white/70 text-sm transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
-            Back to home
+            Change difficulty
           </button>
         </div>
       </main>
@@ -771,7 +1095,7 @@ export default function HexoQuizPage() {
           <div className="shrink-0 w-full h-1 rounded-full bg-white/8">
             <div
               className="h-1 rounded-full bg-purple-500 transition-all duration-1000"
-              style={{ width: `${(timeLeft / GAME_DURATION) * 100}%` }}
+              style={{ width: `${(timeLeft / DIFFICULTY_CONFIG[difficulty].duration) * 100}%` }}
             />
           </div>
 
@@ -784,20 +1108,53 @@ export default function HexoQuizPage() {
 
           {/* Options */}
           <div className="shrink-0 grid grid-cols-2 gap-3">
-            {currentQ.options.map((option, idx) => (
-              <button
-                key={idx}
-                onClick={() => handleAnswer(option)}
-                className="w-full text-left rounded-xl border border-white/8 bg-white/3 hover:bg-white/6 hover:border-purple-500/40 px-4 py-3.5 transition-colors group"
-              >
-                <div className="flex items-start gap-2">
-                  <span className="shrink-0 w-6 h-6 rounded-md border border-white/15 bg-white/5 flex items-center justify-center text-xs font-semibold text-white/50 group-hover:border-purple-500/60 group-hover:text-purple-300 transition-colors">
-                    {optionLabels[idx]}
-                  </span>
-                  <span className="text-white/80 text-sm leading-relaxed">{option}</span>
-                </div>
-              </button>
-            ))}
+            {currentQ.options.map((option, idx) => {
+              const isSelected = selectedAnswer === option;
+              return (
+                <button
+                  key={idx}
+                  onClick={() => handleSelect(option)}
+                  className={`w-full text-left rounded-xl border px-4 py-3.5 transition-colors group ${
+                    isSelected
+                      ? "border-purple-500/70 bg-purple-500/15"
+                      : "border-white/8 bg-white/3 hover:bg-white/6 hover:border-purple-500/40"
+                  }`}
+                >
+                  <div className="flex items-start gap-2">
+                    <span className={`shrink-0 w-6 h-6 rounded-md border flex items-center justify-center text-xs font-semibold transition-colors ${
+                      isSelected
+                        ? "border-purple-400/70 bg-purple-500/20 text-purple-300"
+                        : "border-white/15 bg-white/5 text-white/50 group-hover:border-purple-500/60 group-hover:text-purple-300"
+                    }`}>
+                      {optionLabels[idx]}
+                    </span>
+                    <span className={`text-sm leading-relaxed ${isSelected ? "text-white" : "text-white/80"}`}>
+                      {option}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Action buttons */}
+          <div className="shrink-0 flex gap-3">
+            <Button
+              onClick={handleCheck}
+              disabled={!selectedAnswer || !checkReady}
+              className="flex-1 h-14 text-base bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {!checkReady
+                ? <span className="tabular-nums text-xl font-bold">{cooldownSecs}</span>
+                : <>Check <span className="ml-1.5 text-white/40 text-xs font-normal">↵</span></>
+              }
+            </Button>
+            <Button
+              onClick={handleSkip}
+              className="h-14 px-7 text-base border border-white/10 bg-transparent text-white/45 hover:bg-white/5 hover:text-white/70 rounded-xl"
+            >
+              Skip
+            </Button>
           </div>
 
           {/* Score summary */}
@@ -833,44 +1190,17 @@ export default function HexoQuizPage() {
                 <Gem className="w-4 h-4 text-amber-400" />
                 <span className="text-amber-400 text-sm font-semibold">{pts} pts</span>
               </div>
-              <div className={`text-sm font-bold tabular-nums ${timerColor}`}>
-                {timeLeft}s
+              <div className="flex items-center gap-1.5 rounded-full border border-yellow-500/30 bg-yellow-500/10 px-2.5 py-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-yellow-400 animate-pulse" />
+                <span className="text-xs font-semibold text-yellow-400 tabular-nums">
+                  {timeLeft}s · Paused
+                </span>
               </div>
             </div>
           </div>
 
           {/* Scrollable content */}
           <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-4">
-
-          {/* Result banner */}
-          <div
-            className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${
-              isCorrect
-                ? "border-green-500/30 bg-green-500/8"
-                : "border-red-500/30 bg-red-500/8"
-            }`}
-          >
-            {isCorrect ? (
-              <CheckCircle2 className="w-5 h-5 text-green-400 shrink-0" />
-            ) : (
-              <XCircle className="w-5 h-5 text-red-400 shrink-0" />
-            )}
-            <div className="flex-1">
-              <p className={`text-sm font-semibold ${isCorrect ? "text-green-300" : "text-red-300"}`}>
-                {isCorrect ? "Correct!" : "Incorrect"}
-              </p>
-              {!isCorrect && (
-                <p className="text-white/50 text-xs mt-0.5">
-                  You answered: <span className="text-white/70">{selectedAnswer}</span>
-                  {" · "}
-                  Correct: <span className="text-green-400">{currentQ.answer}</span>
-                </p>
-              )}
-            </div>
-            {isCorrect && (
-              <span className="text-amber-400 text-sm font-semibold shrink-0">+{PTS_PER_CORRECT} pts</span>
-            )}
-          </div>
 
           {/* Question recap */}
           <div className="rounded-xl border border-white/8 bg-white/3 p-4">

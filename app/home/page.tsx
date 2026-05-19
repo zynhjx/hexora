@@ -26,6 +26,9 @@ interface Game {
   description: string;
   icon: ElementType;
   route: string;
+  gameRoute: string;
+  sessionKey: string;
+  orbGated: boolean;
 }
 
 const games: Game[] = [
@@ -35,7 +38,10 @@ const games: Game[] = [
     description:
       "Unscramble cybersecurity terms from a hint. Beat the clock for bonus points!",
     icon: Shuffle,
-    route: "/home/games/hexo-words",
+    route: "/home/games/hexo-words/difficulty",
+    gameRoute: "/home/games/hexo-words",
+    sessionKey: "hexora:jl:startTime",
+    orbGated: false,
   },
   {
     id: 2,
@@ -43,7 +49,10 @@ const games: Game[] = [
     description:
       "Test your cybersecurity knowledge with rapid-fire questions. Answer fast and climb the leaderboard!",
     icon: Brain,
-    route: "/home/games/hexo-quiz",
+    route: "/home/games/hexo-quiz/difficulty",
+    gameRoute: "/home/games/hexo-quiz",
+    sessionKey: "hexora:hq:startTime",
+    orbGated: false,
   },
 ];
 
@@ -58,23 +67,27 @@ function GameCard({
   return (
     <div
       onClick={() => onPlay(game)}
-      className="relative cursor-pointer rounded-2xl border border-blue-500/25 bg-blue-500/8 p-6 transition-all hover:border-blue-500/50 hover:bg-blue-500/14"
+      className="group relative flex cursor-pointer flex-col items-center rounded-2xl border border-blue-500/20 bg-blue-500/6 px-6 pb-7 pt-10 text-center transition-all hover:border-blue-400/40 hover:bg-blue-500/12"
     >
-      <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-blue-600">
-        <Icon className="h-5 w-5 text-white" />
+      {/* Icon */}
+      <div className="relative mb-6 flex h-24 w-24 items-center justify-center rounded-2xl bg-blue-600/20 ring-1 ring-blue-500/30 transition-all group-hover:bg-blue-600/30 group-hover:ring-blue-400/50">
+        <div className="absolute inset-0 rounded-2xl bg-blue-500/10 blur-md" />
+        <Icon className="relative h-12 w-12 text-blue-300" strokeWidth={1.5} />
       </div>
 
-      <h2 className="text-base font-semibold text-white">{game.title}</h2>
-      <p className="mt-1.5 text-sm leading-relaxed text-white/55">
+      {/* Text */}
+      <h2 className="text-lg font-bold text-white">{game.title}</h2>
+      <p className="mt-2.5 text-sm leading-relaxed text-white/50">
         {game.description}
       </p>
 
-      <div className="mt-5 flex items-center justify-end">
-        <span className="flex items-center gap-1 text-xs text-blue-300/70">
+      {/* Entry cost — only for orb-gated games */}
+      {game.orbGated && (
+        <div className="mt-6 flex items-center gap-1.5 rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-medium text-blue-300/80">
           <img src="/orb.svg" alt="orbs" className="h-3 w-3" />
-          {ENTRY_COST} orbs
-        </span>
-      </div>
+          {ENTRY_COST} orbs to play
+        </div>
+      )}
     </div>
   );
 }
@@ -86,30 +99,38 @@ export default function PlayPage() {
   const [confirming, setConfirming] = useState(false);
   const [selected, setSelected] = useState<Game | null>(null);
 
-  const SESSION_KEYS: Record<string, string> = {
-    "/home/games/hexo-words": "hexora:jl:startTime",
-    "/home/games/hexo-quiz": "hexora:hq:startTime",
-  };
-
   function handlePlay(game: Game) {
-    // Skip dialog if the user already has an active session or a pending paid token
-    const hasSession = sessionStorage.getItem(SESSION_KEYS[game.route] ?? "");
-    const hasPaidToken = sessionStorage.getItem(`hexora:paid:${game.route}`);
-    if (hasSession || hasPaidToken) {
+    const hasActiveSession = sessionStorage.getItem(game.sessionKey);
+
+    // Resume active session directly
+    if (hasActiveSession) {
+      router.push(game.gameRoute);
+      return;
+    }
+
+    // Non-orb-gated games go straight to their entry route (e.g. difficulty picker)
+    if (!game.orbGated) {
       router.push(game.route);
       return;
     }
+
+    // Orb-gated: check for a pending paid token
+    const hasPaidToken = sessionStorage.getItem(`hexora:paid:${game.gameRoute}`);
+    if (hasPaidToken) {
+      router.push(game.gameRoute);
+      return;
+    }
+
     setSelected(game);
   }
 
   async function handleConfirm() {
     if (!selected) return;
-    // If there's already an active session or a pending paid token, resume without charging
-    const hasSession = sessionStorage.getItem(SESSION_KEYS[selected.route] ?? "");
-    const hasPaidToken = sessionStorage.getItem(`hexora:paid:${selected.route}`);
-    if (hasSession || hasPaidToken) {
+    const hasActiveSession = sessionStorage.getItem(selected.sessionKey);
+    const hasPaidToken = sessionStorage.getItem(`hexora:paid:${selected.gameRoute}`);
+    if (hasActiveSession || hasPaidToken) {
       setSelected(null);
-      router.push(selected.route);
+      router.push(selected.gameRoute);
       return;
     }
     if (orbs < ENTRY_COST) {
@@ -123,10 +144,9 @@ export default function PlayPage() {
       toast.error("Failed to deduct orbs. Please try again.");
       return;
     }
-    // Write a one-time entry token so the game page knows orbs were paid
-    sessionStorage.setItem(`hexora:paid:${selected.route}`, "1");
+    sessionStorage.setItem(`hexora:paid:${selected.gameRoute}`, "1");
     setSelected(null);
-    router.push(selected.route);
+    router.push(selected.gameRoute);
   }
 
   return (
@@ -151,17 +171,7 @@ export default function PlayPage() {
         </p>
       </div>
 
-      {/* Snake path — desktop */}
-      <div className="hidden sm:block">
-        <div className="grid grid-cols-2 gap-4 items-stretch">
-          {games.map((game) => (
-            <GameCard key={game.id} game={game} onPlay={handlePlay} />
-          ))}
-        </div>
-      </div>
-
-      {/* Single-column list — mobile */}
-      <div className="flex flex-col gap-3 sm:hidden">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {games.map((game) => (
           <GameCard key={game.id} game={game} onPlay={handlePlay} />
         ))}
@@ -184,7 +194,7 @@ export default function PlayPage() {
               <span className="text-white/35">Entry fees are non-refundable.</span>
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="gap-x-2 bg-[#051036]">
+          <DialogFooter className="gap-x-2">
             <Button
               variant="outline"
               onClick={() => setSelected(null)}

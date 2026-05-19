@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Crown, Medal } from "lucide-react";
+import { Crown, Medal, Info, Shuffle, Brain } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/supabaseClient";
@@ -9,27 +9,11 @@ import { supabase } from "@/supabaseClient";
 interface Player {
   rank: number;
   username: string;
+  fullName: string;
   avatar: string;
   points: number;
 }
 
-const SAMPLE_PLAYERS: Player[] = [
-  { rank: 1,  username: "cipherxhunter",  avatar: "CH", points: 14820 },
-  { rank: 2,  username: "n3t_hawk",        avatar: "NH", points: 13450 },
-  { rank: 3,  username: "zeroDB",          avatar: "ZD", points: 12305 },
-  { rank: 4,  username: "ph4ntom_root",    avatar: "PR", points: 11780 },
-  { rank: 5,  username: "vulnscanner99",   avatar: "VS", points: 10990 },
-  { rank: 6,  username: "infosec_kyoru",   avatar: "IK", points: 9870  },
-  { rank: 7,  username: "packet_storm",    avatar: "PS", points: 9120  },
-  { rank: 8,  username: "shellcoder",      avatar: "SC", points: 8460  },
-  { rank: 9,  username: "malw4re_mage",    avatar: "MM", points: 7890  },
-  { rank: 10, username: "redteam_rio",     avatar: "RR", points: 7340  },
-  { rank: 11, username: "bytebr34ker",     avatar: "BB", points: 6810  },
-  { rank: 12, username: "xss_phantom",     avatar: "XP", points: 6250  },
-  { rank: 13, username: "hash_cracker7",   avatar: "HC", points: 5700  },
-  { rank: 14, username: "darkpr0xy",       avatar: "DP", points: 5120  },
-  { rank: 15, username: "l0gin_bypass",    avatar: "LB", points: 4530  },
-];
 
 const MEDAL_COLORS: Record<number, string> = {
   1: "text-amber-400",
@@ -50,6 +34,60 @@ function avatarInitials(username: string): string {
   return username.slice(0, 2).toUpperCase();
 }
 
+function HowPointsWork() {
+  return (
+    <div className="rounded-2xl border border-blue-500/25 bg-blue-500/6 p-5">
+      <div className="mb-3 flex items-center gap-2">
+        <Info className="h-4 w-4 shrink-0 text-blue-400" />
+        <h2 className="text-sm font-semibold text-blue-300">How points work</h2>
+      </div>
+      <p className="mb-4 text-sm leading-relaxed text-white/55">
+        Your score is the sum of your{" "}
+        <span className="font-medium text-white/80">personal best</span> in each game.
+        Only your highest run ever counts — not cumulative totals.
+      </p>
+      <div className="mb-4 rounded-xl border border-white/8 bg-white/3 px-4 py-3">
+        <div className="flex flex-col items-center gap-1 text-sm">
+          <span className="flex items-center gap-1.5 text-white/60">
+            <Shuffle className="h-3.5 w-3.5 text-blue-300" /> Best HexoWords
+          </span>
+          <span className="text-white/25">+</span>
+          <span className="flex items-center gap-1.5 text-white/60">
+            <Brain className="h-3.5 w-3.5 text-blue-300" /> Best HexoQuiz
+          </span>
+          <span className="text-white/25">=</span>
+          <span className="font-semibold text-white">Leaderboard Score</span>
+        </div>
+      </div>
+      <div className="rounded-xl border border-white/8 bg-white/3 p-4">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-white/30">Example</p>
+        <div className="space-y-2 text-sm text-white/55">
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-1.5">
+              <Shuffle className="h-3.5 w-3.5 text-blue-300" /> HexoWords best
+            </span>
+            <span className="font-semibold text-white/80">100 pts</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-1.5">
+              <Brain className="h-3.5 w-3.5 text-blue-300" /> HexoQuiz best
+            </span>
+            <span className="font-semibold text-white/80">200 pts</span>
+          </div>
+          <div className="flex items-center justify-between border-t border-white/8 pt-2">
+            <span className="font-medium text-white/70">Total</span>
+            <span className="font-bold text-amber-400">300 pts</span>
+          </div>
+        </div>
+        <p className="mt-3 text-xs text-white/35">
+          Beat your HexoQuiz record with 250 pts and your score auto-updates to{" "}
+          <span className="font-medium text-white/55">350 pts</span>.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function RankIcon({ rank }: { rank: number }) {
   if (rank === 1) return <Crown className="h-5 w-5 text-amber-400" />;
   if (rank === 2) return <Medal className="h-5 w-5 text-slate-300" />;
@@ -62,27 +100,28 @@ function RankIcon({ rank }: { rank: number }) {
 }
 
 export default function LeaderboardPage() {
-  const [players, setPlayers] = useState<Player[]>(SAMPLE_PLAYERS);
+  const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchLeaderboard() {
-      const { data, error } = await supabase
-        .from("leaderboard")
-        .select("rank, username, pts")
+      const { data } = await supabase
+        .from("profiles")
+        .select("username, full_name, pts")
+        .order("pts", { ascending: false })
         .limit(100);
 
-      if (!error && data && data.length > 0) {
+      if (data) {
         setPlayers(
-          data.map((row) => ({
-            rank: Number(row.rank),
+          data.map((row, i) => ({
+            rank: i + 1,
             username: row.username as string,
+            fullName: (row.full_name as string) ?? "",
             avatar: avatarInitials(row.username as string),
             points: row.pts as number,
           })),
         );
       }
-      // If error or empty, keep sample data
       setLoading(false);
     }
 
@@ -97,14 +136,23 @@ export default function LeaderboardPage() {
   ];
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-6 py-12">
+    <div className="relative mx-auto w-full px-6 py-12" style={{ maxWidth: "1024px" }}>
+      {/* Aside — absolutely positioned to the right, won't affect leaderboard layout */}
+      <aside className="absolute left-full top-12 ml-6 hidden w-64 xl:block">
+        <HowPointsWork />
+      </aside>
+
       {/* Header */}
-      <div className="mb-10">
+      <div className="mb-8">
         <h1 className="text-3xl font-bold text-white">Leaderboard</h1>
         <p className="mt-1.5 text-white/45">
-          Top players ranked by total points. #1 wins PHP 1,000 every season.
+          Top players ranked by total points.{" "}
+          <span className="text-amber-400/80 font-medium">#1 wins PHP 1,000</span> — awarded at the end of Day 2 (May 21).
         </p>
       </div>
+
+        {/* ── Main leaderboard column ── */}
+        <div>
 
       {loading ? (
         <>
@@ -129,6 +177,12 @@ export default function LeaderboardPage() {
             ))}
           </div>
         </>
+      ) : players.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <p className="text-4xl mb-4">🏆</p>
+          <p className="text-white/60 font-medium">No players yet</p>
+          <p className="mt-1 text-sm text-white/30">Be the first to play and claim the top spot!</p>
+        </div>
       ) : (
         <>
           {/* Podium */}
@@ -167,8 +221,11 @@ export default function LeaderboardPage() {
                       {p.avatar}
                     </div>
                     <p className="max-w-full truncate text-sm font-semibold text-white">
-                      {p.username}
+                      {p.fullName || p.username}
                     </p>
+                    {p.fullName && (
+                      <p className="max-w-full truncate text-xs text-white/40">@{p.username}</p>
+                    )}
                     <p className={cn("text-xs font-bold", MEDAL_COLORS[order])}>
                       {p.points.toLocaleString()} pts
                     </p>
@@ -210,9 +267,14 @@ export default function LeaderboardPage() {
                   >
                     {p.avatar}
                   </div>
-                  <span className="text-sm font-medium text-white">
-                    {p.username}
-                  </span>
+                  <div>
+                    <p className="text-sm font-medium text-white leading-tight">
+                      {p.fullName || p.username}
+                    </p>
+                    {p.fullName && (
+                      <p className="text-xs text-white/35 leading-tight">@{p.username}</p>
+                    )}
+                  </div>
                 </div>
 
                 <span
@@ -228,10 +290,17 @@ export default function LeaderboardPage() {
           </div>
 
           <p className="mt-4 text-center text-xs text-white/25">
-            Season resets every 30 days
+            2-day event · May 20–21, 2026 · Prize awarded end of Day 2
           </p>
         </>
       )}
+
+        {/* Stacked aside — only shown below xl */}
+        <div className="xl:hidden mt-8">
+          <HowPointsWork />
+        </div>
+
+        </div>{/* end main column */}
     </div>
   );
 }

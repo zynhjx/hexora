@@ -60,10 +60,17 @@ export default function Header() {
     const { data, error } = await supabase.rpc("redeem_code", { p_code: code.trim() });
 
     if (error) {
-      const msg =
-        error.message.includes("INVALID_CODE")
-          ? "Invalid or already used code."
-          : "Something went wrong. Please try again.";
+      const msg = error.message.includes("OUTSIDE_HOURS")
+        ? "Codes can only be redeemed between 8:00 AM and 5:00 PM."
+        : error.message.includes("OUTSIDE_EVENT")
+          ? "Code redemption is only available on event days."
+          : error.message.includes("WRONG_DAY")
+            ? "This code is not valid for today's event day."
+            : error.message.includes("ALREADY_REDEEMED")
+              ? "This code has already been redeemed."
+              : error.message.includes("INVALID_CODE")
+                ? "Invalid code. Please check and try again."
+                : "Something went wrong. Please try again.";
       toast.error(msg);
     } else {
       const result = data as { orbs_reward: number; new_orbs: number };
@@ -81,9 +88,9 @@ export default function Header() {
     { href: "/home/leaderboard", label: "Leaderboard" },
   ];
 
-  const avatarLetter = profile.username.charAt(0).toUpperCase();
-  const displayName = profile.username.replace(/[_\-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-  const displayEmail = user?.email ?? "—";
+  const avatarLetter = (profile.fullName || profile.username).charAt(0).toUpperCase();
+  const displayName = profile.fullName || profile.username.replace(/[_\-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const displayEmail = profile.username ? `@${profile.username}` : "—";
   const orbs = profile.orbs;
 
   return (
@@ -248,7 +255,7 @@ export default function Header() {
 
           <form onSubmit={handleRedeem} className="space-y-4">
             <Input
-              placeholder="e.g. HEXORA2026"
+              placeholder="e.g. K7MNPX2QR"
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
               className="border-white/20 bg-white/5 uppercase tracking-widest text-white placeholder:normal-case placeholder:tracking-normal placeholder:text-white/30 focus-visible:ring-amber-400/40"
@@ -259,7 +266,7 @@ export default function Header() {
                 type="button"
                 variant="ghost"
                 onClick={() => setRedeemOpen(false)}
-                className="text-white/60 hover:text-white"
+                className="text-white/60 hover:bg-white/8 hover:text-white/80"
               >
                 Cancel
               </Button>

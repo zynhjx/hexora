@@ -10,8 +10,8 @@ type Mode = "login" | "register";
 
 export default function AuthPage() {
   const [mode, setMode] = useState<Mode>("login");
+  const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -23,29 +23,51 @@ export default function AuthPage() {
     e.preventDefault();
     setLoading(true);
 
+    const trimmed = username.trim().toLowerCase();
+    const syntheticEmail = `${trimmed}@hexora.local`;
+
     if (mode === "register") {
+      if (!fullName.trim()) {
+        toast.error("Full name is required.");
+        setLoading(false);
+        return;
+      }
+      if (!trimmed) {
+        toast.error("Username is required.");
+        setLoading(false);
+        return;
+      }
       if (password !== confirmPassword) {
         toast.error("Passwords do not match.");
         setLoading(false);
         return;
       }
-      const { error } = await supabase.auth.signUp({
-        email,
+      const { error: signUpError } = await supabase.auth.signUp({
+        email: syntheticEmail,
         password,
-        options: { data: { username: username.trim() || email.split('@')[0] } },
+        options: { data: { username: trimmed, full_name: fullName.trim() } },
       });
-      if (error) {
-        toast.error(error.message);
+      if (signUpError) {
+        toast.error(signUpError.message);
       } else {
-        toast.success("Account created! Check your email to confirm.");
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: syntheticEmail,
+          password,
+        });
+        if (signInError) {
+          toast.error(signInError.message);
+        } else {
+          toast.success("Account created! Welcome to Hexora.");
+          router.push("/home");
+        }
       }
     } else {
       const { error } = await supabase.auth.signInWithPassword({
-        email,
+        email: syntheticEmail,
         password,
       });
       if (error) {
-        toast.error(error.message);
+        toast.error("Invalid username or password.");
       } else {
         toast.success("Logged in successfully!");
         router.push("/home");
@@ -57,6 +79,7 @@ export default function AuthPage() {
 
   function switchMode(next: Mode) {
     setMode(next);
+    setFullName("");
     setUsername("");
     setPassword("");
     setConfirmPassword("");
@@ -66,9 +89,9 @@ export default function AuthPage() {
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-theme-dark-blue px-0 py-0 font-sans sm:px-8 sm:py-10">
-      <section className="relative w-full max-w-lg rounded-none border-0 bg-theme-dark-blue p-8 text-white shadow-none sm:rounded-3xl sm:border sm:border-white/20 sm:p-10 sm:shadow-[0_24px_60px_rgba(0,0,0,0.55)] min-h-screen sm:min-h-0 flex flex-col justify-center">
-        <header className="mb-8 space-y-3 text-center">
-          <p className="text-xs font-medium uppercase tracking-[0.24em] text-white/60">Hexora Access</p>
+      <section className="relative w-full max-w-lg rounded-none border-0 bg-theme-dark-blue p-8 text-white shadow-none sm:rounded-3xl sm:border border-white/10 sm:p-10 sm:shadow-[0_0_60px_rgba(0,0,0,0.55)] min-h-screen sm:min-h-0 flex flex-col justify-center">
+        <header className="mb-8 space-y-2 text-center">
+          {/* <p className="text-xs font-medium uppercase tracking-[0.24em] text-white/60">Hexora Access</p> */}
           <h1 className="text-3xl font-semibold leading-tight sm:text-4xl">
             {mode === "login" ? "Welcome back" : "Create your account"}
           </h1>
@@ -81,33 +104,35 @@ export default function AuthPage() {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid gap-5">
+
             {mode === "register" && (
-              <label htmlFor="username" className="space-y-2 text-sm text-white/85">
-                <span className="font-medium">Username</span>
+              <label htmlFor="fullName" className="space-y-2 text-sm text-white/85">
+                <span className="font-medium">Full Name</span>
                 <input
-                  id="username"
+                  id="fullName"
                   type="text"
-                  placeholder="your_handle"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="Your real name (for prize claiming)"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
                   required
-                  className="h-12 w-full rounded-xl border border-white/25 bg-theme-dark-blue px-4 text-base text-white outline-none transition placeholder:text-white/45 focus:border-white/50 focus:ring-2 focus:ring-white/20"
+                  className="h-12 w-full rounded-sm border border-white/25 bg-theme-dark-blue px-4 text-base text-white outline-none transition placeholder:text-white/45 focus:border-white/50 focus:ring-2 focus:ring-white/20"
                 />
               </label>
             )}
 
-            <label htmlFor="email" className="space-y-2 text-sm text-white/85">
-              <span className="font-medium">Email</span>
+            <label htmlFor="username" className="space-y-2 text-sm text-white/85">
+              <span className="font-medium">Username</span>
               <input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="username"
+                type="text"
+                placeholder="your_handle"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 required
-                className="h-12 w-full rounded-xl border border-white/25 bg-theme-dark-blue px-4 text-base text-white outline-none transition placeholder:text-white/45 focus:border-white/50 focus:ring-2 focus:ring-white/20"
+                className="h-12 w-full rounded-sm border border-white/25 bg-theme-dark-blue px-4 text-base text-white outline-none transition placeholder:text-white/45 focus:border-white/50 focus:ring-2 focus:ring-white/20"
               />
             </label>
+
 
             <label htmlFor="password" className="space-y-2 text-sm text-white/85">
               <span className="font-medium">Password</span>
@@ -115,11 +140,11 @@ export default function AuthPage() {
                 <input
                   id="password"
                   type={showPassword ? "text" : "password"}
-                  placeholder="********"
+                  placeholder="Enter your Password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="h-12 w-full rounded-xl border border-white/25 bg-theme-dark-blue px-4 pr-12 text-base text-white outline-none transition placeholder:text-white/45 focus:border-white/50 focus:ring-2 focus:ring-white/20"
+                  className="h-12 w-full rounded-sm border border-white/25 bg-theme-dark-blue px-4 pr-12 text-base text-white outline-none transition placeholder:text-white/45 focus:border-white/50 focus:ring-2 focus:ring-white/20"
                 />
                 <button
                   type="button"
@@ -139,11 +164,11 @@ export default function AuthPage() {
                   <input
                     id="confirmPassword"
                     type={showConfirmPassword ? "text" : "password"}
-                    placeholder="********"
+                    placeholder="Confirm your Password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     required
-                    className="h-12 w-full rounded-xl border border-white/25 bg-theme-dark-blue px-4 pr-12 text-base text-white outline-none transition placeholder:text-white/45 focus:border-white/50 focus:ring-2 focus:ring-white/20"
+                    className="h-12 w-full rounded-sm border border-white/25 bg-theme-dark-blue px-4 pr-12 text-base text-white outline-none transition placeholder:text-white/45 focus:border-white/50 focus:ring-2 focus:ring-white/20"
                   />
                   <button
                     type="button"
@@ -162,7 +187,7 @@ export default function AuthPage() {
             <button
               type="submit"
               disabled={loading}
-              className="h-12 w-full rounded-xl bg-white text-base font-semibold text-theme-dark-blue transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
+              className="h-12 w-full rounded-sm bg-white text-base font-semibold text-theme-dark-blue transition hover:cursor-pointer hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading
                 ? "Please wait..."
@@ -172,11 +197,11 @@ export default function AuthPage() {
             </button>
 
             <p className="text-center text-sm text-white/75">
-              {mode === "login" ? "Don&apos;t have an account?" : "Already have an account?"}{" "}
+              {mode === "login" ? "Don't have an account?" : "Already have an account?"}{" "}
               <button
                 type="button"
                 onClick={() => switchMode(mode === "login" ? "register" : "login")}
-                className="font-semibold text-white underline decoration-white/60 underline-offset-4 transition hover:text-white/80"
+                className="font-semibold text-white hover:underline decoration-white/60 hover:underline-offset-4 transition hover:text-white/80 hover:cursor-pointer"
               >
                 {mode === "login" ? "Register" : "Sign In"}
               </button>

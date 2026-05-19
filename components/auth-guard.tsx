@@ -9,6 +9,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
+    // Initial check
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) {
         router.replace("/auth");
@@ -16,6 +17,15 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
         setChecking(false);
       }
     });
+
+    // Also redirect if the session is revoked or expires mid-use
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        router.replace("/auth");
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, [router]);
 
   if (checking) return null;
