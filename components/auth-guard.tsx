@@ -10,7 +10,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Initial check
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session } }: { data: { session: import("@supabase/supabase-js").Session | null } }) => {
       if (!session) {
         router.replace("/auth");
       } else {
@@ -19,7 +19,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
     });
 
     // Also redirect if the session is revoked or expires mid-use
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: import("@supabase/supabase-js").AuthChangeEvent, session: import("@supabase/supabase-js").Session | null) => {
       if (!session) {
         router.replace("/auth");
       }

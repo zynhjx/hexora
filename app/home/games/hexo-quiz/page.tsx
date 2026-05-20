@@ -796,7 +796,7 @@ export default function HexoQuizPage() {
   const [difficulty, setDifficulty] = useState<Difficulty>("intermediate");
   const [questions, setQuestions] = useState<Question[]>([]);
   const [qIndex, setQIndex] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(DIFFICULTY_CONFIG.intermediate.duration);
+  const [timeLeft, setTimeLeft] = useState<number>(DIFFICULTY_CONFIG.intermediate.duration);
   const [pts, setPts] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
   const [wrongCount, setWrongCount] = useState(0);

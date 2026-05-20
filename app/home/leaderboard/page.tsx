@@ -113,7 +113,7 @@ export default function LeaderboardPage() {
 
       if (data) {
         setPlayers(
-          data.map((row, i) => ({
+          data.map((row: { username: string; full_name: string | null; pts: number }, i: number) => ({
             rank: i + 1,
             username: row.username as string,
             fullName: (row.full_name as string) ?? "",

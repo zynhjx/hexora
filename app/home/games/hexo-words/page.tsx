@@ -2735,7 +2735,7 @@ export default function JumbledLettersPage() {
   const [qIndex, setQIndex] = useState(0);
   const [input, setInput] = useState("");
   const [difficulty, setDifficulty] = useState<Difficulty>("intermediate");
-  const [timeLeft, setTimeLeft] = useState(DIFFICULTY_CONFIG.intermediate.duration);
+  const [timeLeft, setTimeLeft] = useState<number>(DIFFICULTY_CONFIG.intermediate.duration);
   const [pts, setPts] = useState(0);
 
   const [correctCount, setCorrectCount] = useState(0);

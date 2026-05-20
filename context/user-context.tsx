@@ -64,7 +64,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     }
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session } }: { data: { session: import("@supabase/supabase-js").Session | null } }) => {
       if (session?.user) {
         loadProfile(session.user.id, session.user.email ?? "");
       } else {
@@ -72,7 +72,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((_event: import("@supabase/supabase-js").AuthChangeEvent, session: import("@supabase/supabase-js").Session | null) => {
       if (session?.user) {
         loadProfile(session.user.id, session.user.email ?? "");
       } else {
